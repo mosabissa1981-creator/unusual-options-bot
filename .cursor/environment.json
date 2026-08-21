@@ -4,7 +4,7 @@
   "terminals": [
     {
       "name": "web-scanner",
-      "command": ".venv/bin/python webapp.py"
+      "command": ".venv/bin/streamlit run streamlit_app.py --server.port=8080 --server.address=0.0.0.0 --server.headless=true --browser.gatherUsageStats=false"
     }
   ]
 }
