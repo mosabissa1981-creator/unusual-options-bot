@@ -1,80 +1,47 @@
-# Unusual Options + GEX Scanner
+# Unusual Options + GEX Scanner (Chrome web app)
 
-Free prototype that scans unusual options and approximates **GEX (gamma exposure)** by strike.
+Free unusual-options scanner you open in **Google Chrome** (phone or computer), built the same way as the GEX web page.
 
-## Easiest on iPhone: Telegram
+## Open in Chrome (easy)
 
-1. On iPhone, install **Telegram**
-2. Open Telegram → search **@BotFather** → Start
-3. Send `/newbot`, pick a name (e.g. `My GEX Scanner`) and username
-4. Copy the **token** BotFather gives you
-5. On your computer:
-
-```bash
-cd unusual-options-bot
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-cp .env.example .env
-```
-
-6. Edit `.env` and paste:
-```
-TELEGRAM_BOT_TOKEN=123456:ABC-your-token
-```
-
-7. Start the bot (keep this running on your computer/VPS):
-```bash
-python telegram_bot.py
-```
-
-8. On iPhone Telegram, open **your bot** → Start, then try:
-- `/gex SPY`
-- `/scan NVDA`
-- `/demo`
-
-That’s the easiest phone workflow: tap commands, get GEX levels back as messages.
-
----
-
-## Mobile web (Safari / Home Screen)
-
-```bash
-source .venv/bin/activate
-python webapp.py
-```
-
-- On the same computer: open `http://127.0.0.1:8080`
-- On iPhone (same Wi‑Fi): open `http://YOUR_COMPUTER_IP:8080`
-- In Safari: Share → **Add to Home Screen**
-
-Buttons: **GEX**, **Unusual**, quick tickers SPY/QQQ/NVDA/TSLA.
-
----
-
-## Laptop terminal (original)
-
-```bash
-python main.py --demo
-python main.py
-python main.py --gex SPY
-```
-
----
-
-## What GEX numbers mean (simple)
-
-- **Net GEX positive**: dealers often dampen moves (pin / choppier)
-- **Net GEX negative**: moves can extend more easily
-- **Flip / zero-gamma**: area where GEX sign changes
-- **Large +/− GEX strikes**: magnets / walls traders watch
-
-This is an **approximation** from free Yahoo chains (OI + gamma), not SpotGamma/Unusual Whales dealer GEX.
-
-## Install (first time)
-
+### 1) Start the website on your computer
 ```bash
 cd unusual-options-bot
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env
+python webapp.py
 ```
+
+### 2) Open Chrome
+Go to:
+
+**http://127.0.0.1:8080**
+
+### 3) Use the tabs
+- **Unusual** — scan one ticker (NVDA, TSLA, …)
+- **Watchlist** — scan SPY/QQQ/AAPL/NVDA/TSLA/AMZN/META/MSFT
+- **GEX** — gamma exposure for one ticker
+- **Demo** — sample unusual alerts (no live data)
+
+Tap a green chip (SPY, NVDA, …) or type a ticker and hit **Scan**.
+
+### Phone Chrome (same Wi‑Fi)
+1. Find your computer’s IP (example `192.168.1.20`)
+2. On phone Chrome open: `http://192.168.1.20:8080`
+3. Keep `python webapp.py` running on the computer
+
+---
+
+## Optional: terminal / Telegram
+
+```bash
+python main.py                 # unusual options in terminal
+python main.py --gex SPY       # GEX in terminal
+python telegram_bot.py         # iPhone Telegram commands
+```
+
+## Notes
+- Free delayed Yahoo Finance data
+- Not Unusual Whales / Barchart paid flow
+- GEX is an approximation from option chains

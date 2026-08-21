@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Mobile-friendly GEX scanner web app (open in iPhone Safari)."""
+"""Free Unusual Options scanner — open in Chrome (desktop or phone)."""
 
 from __future__ import annotations
 
+import html as html_lib
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -10,146 +11,216 @@ from urllib.parse import parse_qs, urlparse
 from dotenv import load_dotenv
 
 from gex import compute_gex, demo_gex, format_gex_text
-from scanner import scan_ticker
+from scanner import demo_alerts, scan_ticker, scan_watchlist
 
 
-def page(title: str, body: str, ticker: str) -> bytes:
-    safe_ticker = (
-        ticker.replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
+DEFAULT_WATCHLIST = ["SPY", "QQQ", "AAPL", "NVDA", "TSLA", "AMZN", "META", "MSFT"]
+
+
+def _esc(value: object) -> str:
+    return html_lib.escape(str(value), quote=True)
+
+
+def render_unusual_cards(alerts, title: str) -> str:
+    if not alerts:
+        return f"<p class='empty'>No unusual contracts matched for {_esc(title)}.</p>"
+
+    cards = []
+    for a in alerts[:20]:
+        side = a.option_type.upper()
+        side_class = "call" if a.option_type == "call" else "put"
+        reasons = ", ".join(a.reasons)
+        cards.append(
+            f"""
+            <article class="card {side_class}">
+              <header>
+                <div class="sym">{_esc(a.ticker)} <span>{_esc(side)}</span></div>
+                <div class="score">Score {_esc(a.score)}</div>
+              </header>
+              <div class="strike">${_esc(f"{a.strike:g}")} · exp {_esc(a.expiry)}</div>
+              <div class="metrics">
+                <div><b>Vol</b><span>{a.volume:,}</span></div>
+                <div><b>OI</b><span>{a.open_interest:,}</span></div>
+                <div><b>Vol/OI</b><span>{_esc(a.vol_oi_ratio)}x</span></div>
+                <div><b>Premium</b><span>${a.premium:,.0f}</span></div>
+              </div>
+              <div class="meta">Last ${a.last_price:.2f} · Spot ${a.spot:.2f}<br/>{_esc(reasons)}</div>
+            </article>
+            """
+        )
+    return (
+        f"<p class='count'>Found <b>{len(alerts)}</b> unusual contracts "
+        f"(showing top {min(20, len(alerts))})</p>"
+        + "<div class='grid'>"
+        + "".join(cards)
+        + "</div>"
     )
-    safe_body = (
-        body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def page(*, title: str, mode: str, ticker: str, content: str) -> bytes:
+    active = {
+        "scan": "active" if mode == "scan" else "",
+        "watch": "active" if mode == "watch" else "",
+        "gex": "active" if mode == "gex" else "",
+        "demo": "active" if mode == "demo" else "",
+    }
+    chips = "".join(
+        f'<a class="chip" href="/?mode=scan&ticker={t}">{t}</a>' for t in DEFAULT_WATCHLIST
     )
-    html = f"""<!doctype html>
+    doc = f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>{title}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#10160f" />
+  <title>{_esc(title)}</title>
   <style>
     :root {{
-      --bg0: #0f1412;
-      --bg1: #18201c;
-      --ink: #e8f0ea;
-      --muted: #9bb0a3;
-      --accent: #3dba7c;
-      --line: rgba(232,240,234,.12);
+      --bg: #10160f;
+      --panel: rgba(255,255,255,.04);
+      --ink: #eef5ee;
+      --muted: #9aaf9d;
+      --line: rgba(238,245,238,.12);
+      --accent: #58c27d;
+      --call: #3dba7c;
+      --put: #d27b5a;
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      min-height: 100vh;
-      font-family: "Avenir Next", "Segoe UI", sans-serif;
       color: var(--ink);
+      font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
       background:
-        radial-gradient(1200px 600px at 10% -10%, #1f3a2d 0%, transparent 55%),
-        radial-gradient(900px 500px at 100% 0%, #2a2418 0%, transparent 50%),
-        linear-gradient(180deg, var(--bg0), var(--bg1));
+        radial-gradient(900px 420px at 0% 0%, #243528 0%, transparent 60%),
+        radial-gradient(700px 380px at 100% 10%, #2b2416 0%, transparent 55%),
+        linear-gradient(180deg, #0c120c, var(--bg));
+      min-height: 100vh;
     }}
-    main {{
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 1.25rem 1rem 3rem;
-    }}
+    main {{ max-width: 920px; margin: 0 auto; padding: 1.1rem 1rem 2.5rem; }}
     h1 {{
-      font-size: clamp(1.8rem, 7vw, 2.4rem);
-      letter-spacing: -0.03em;
-      margin: 0 0 .35rem;
+      margin: 0;
+      font-size: clamp(1.7rem, 5vw, 2.35rem);
+      letter-spacing: -.03em;
+      font-family: "IBM Plex Serif", Georgia, serif;
     }}
-    .sub {{ color: var(--muted); margin: 0 0 1.25rem; line-height: 1.4; }}
-    form {{
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      gap: .6rem;
-      margin-bottom: 1rem;
+    .sub {{ color: var(--muted); margin: .35rem 0 1rem; line-height: 1.4; }}
+    .tabs {{
+      display: flex; gap: .45rem; flex-wrap: wrap; margin-bottom: .9rem;
     }}
-    input, button, a.btn {{
-      font: inherit;
-      border-radius: 12px;
-      border: 1px solid var(--line);
+    .tabs a {{
+      text-decoration: none; color: var(--ink);
+      border: 1px solid var(--line); border-radius: 999px;
+      padding: .55rem .9rem; background: transparent; font-weight: 600;
+    }}
+    .tabs a.active {{ background: var(--accent); color: #062214; border-color: transparent; }}
+    form.bar {{
+      display: grid; grid-template-columns: 1fr auto; gap: .55rem; margin-bottom: .75rem;
+    }}
+    input, button {{
+      font: inherit; border-radius: 12px; border: 1px solid var(--line);
       padding: .85rem 1rem;
     }}
-    input {{
-      background: rgba(255,255,255,.04);
-      color: var(--ink);
-      width: 100%;
+    input {{ width: 100%; background: var(--panel); color: var(--ink); }}
+    button {{
+      background: var(--accent); color: #062214; font-weight: 700; cursor: pointer;
     }}
-    button, a.btn {{
-      background: var(--accent);
-      color: #062214;
-      font-weight: 700;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      white-space: nowrap;
+    .chips {{ display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1rem; }}
+    .chip {{
+      text-decoration: none; color: var(--ink); border: 1px solid var(--line);
+      border-radius: 999px; padding: .4rem .7rem; font-size: .92rem;
     }}
-    button.secondary, a.btn.secondary {{ background: transparent; color: var(--ink); }}
+    .count {{ color: var(--muted); margin: 0 0 .8rem; }}
+    .grid {{
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: .75rem;
+    }}
+    .card {{
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; padding: .9rem 1rem;
+      border-top: 3px solid var(--accent);
+    }}
+    .card.put {{ border-top-color: var(--put); }}
+    .card.call {{ border-top-color: var(--call); }}
+    .card header {{ display: flex; justify-content: space-between; gap: .5rem; }}
+    .sym {{ font-weight: 700; font-size: 1.05rem; }}
+    .sym span {{ color: var(--muted); font-weight: 600; margin-left: .25rem; }}
+    .score {{ color: var(--accent); font-weight: 700; }}
+    .strike {{ margin: .35rem 0 .55rem; color: var(--ink); }}
+    .metrics {{
+      display: grid; grid-template-columns: 1fr 1fr; gap: .35rem .6rem; margin-bottom: .55rem;
+    }}
+    .metrics b {{ display: block; color: var(--muted); font-size: .75rem; font-weight: 600; }}
+    .metrics span {{ font-variant-numeric: tabular-nums; }}
+    .meta {{ color: var(--muted); font-size: .86rem; line-height: 1.35; }}
     .panel {{
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 1rem;
-      background: rgba(0,0,0,.22);
-      overflow: auto;
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; padding: 1rem; overflow: auto;
     }}
-    pre {{
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: .92rem;
-      line-height: 1.45;
-    }}
-    .hint {{ color: var(--muted); font-size: .9rem; margin-top: 1rem; }}
-    .row {{ display: flex; gap: .5rem; flex-wrap: wrap; margin: .75rem 0 0; }}
+    pre {{ margin: 0; white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; line-height: 1.45; }}
+    .empty {{ color: var(--muted); }}
+    .hint {{ color: var(--muted); font-size: .88rem; margin-top: 1rem; }}
     @media (max-width: 560px) {{
-      form {{ grid-template-columns: 1fr 1fr; }}
-      form input {{ grid-column: 1 / -1; }}
+      .metrics {{ grid-template-columns: 1fr 1fr; }}
     }}
   </style>
 </head>
 <body>
   <main>
-    <h1>GEX Scanner</h1>
-    <p class="sub">Mobile scanner for gamma exposure + unusual options. Add to iPhone Home Screen from Safari Share.</p>
-    <form method="GET" action="/">
-      <input name="ticker" value="{safe_ticker}" placeholder="Ticker e.g. SPY" maxlength="12" autocapitalize="characters" />
-      <button type="submit" name="mode" value="gex">GEX</button>
-      <button class="secondary" type="submit" name="mode" value="scan">Unusual</button>
+    <h1>Unusual Options</h1>
+    <p class="sub">Free browser scanner — same style as the GEX page. Open in Chrome on phone or computer.</p>
+
+    <nav class="tabs">
+      <a class="{active['scan']}" href="/?mode=scan&ticker={_esc(ticker)}">Unusual</a>
+      <a class="{active['watch']}" href="/?mode=watch">Watchlist</a>
+      <a class="{active['gex']}" href="/?mode=gex&ticker={_esc(ticker)}">GEX</a>
+      <a class="{active['demo']}" href="/?mode=demo">Demo</a>
+    </nav>
+
+    <form class="bar" method="GET" action="/">
+      <input type="hidden" name="mode" value="{_esc(mode if mode in ('scan','gex') else 'scan')}" />
+      <input name="ticker" value="{_esc(ticker)}" placeholder="Ticker e.g. NVDA" maxlength="12" />
+      <button type="submit">Scan</button>
     </form>
-    <div class="row">
-      <a class="btn secondary" href="/?ticker=SPY&mode=gex">SPY</a>
-      <a class="btn secondary" href="/?ticker=QQQ&mode=gex">QQQ</a>
-      <a class="btn secondary" href="/?ticker=NVDA&mode=gex">NVDA</a>
-      <a class="btn secondary" href="/?ticker=TSLA&mode=gex">TSLA</a>
-      <a class="btn secondary" href="/?mode=demo">Demo</a>
-    </div>
-    <div class="panel" style="margin-top:1rem"><pre>{safe_body}</pre></div>
-    <p class="hint">Free delayed data approx. Not dealer-exact GEX. For phone push alerts, run the Telegram bot.</p>
+
+    <div class="chips">{chips}</div>
+    {content}
+    <p class="hint">Free delayed Yahoo data. Not Unusual Whales flow. Run on your computer, then open this page in Chrome.</p>
   </main>
 </body>
 </html>"""
-    return html.encode("utf-8")
+    return doc.encode("utf-8")
 
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         parsed = urlparse(self.path)
         if parsed.path not in ("/", "/index.html"):
-            self.send_response(404)
-            self.end_headers()
+            self.send_error(404)
             return
 
         qs = parse_qs(parsed.query)
-        ticker = (qs.get("ticker", ["SPY"])[0] or "SPY").upper().strip()
-        mode = (qs.get("mode", ["gex"])[0] or "gex").lower()
+        ticker = (qs.get("ticker", ["NVDA"])[0] or "NVDA").upper().strip()
+        mode = (qs.get("mode", ["scan"])[0] or "scan").lower()
 
         try:
             if mode == "demo":
-                text = format_gex_text(demo_gex(ticker))
-            elif mode == "scan":
+                content = render_unusual_cards(demo_alerts(), "demo")
+                title = "Unusual Options Demo"
+            elif mode == "watch":
+                alerts = scan_watchlist(
+                    DEFAULT_WATCHLIST,
+                    max_expiries=2,
+                    min_volume=500,
+                    min_open_interest=100,
+                    min_vol_oi_ratio=3.0,
+                    min_premium=100_000,
+                )
+                content = render_unusual_cards(alerts, "watchlist")
+                title = "Unusual Options Watchlist"
+            elif mode == "gex":
+                text = format_gex_text(compute_gex(ticker, max_expiries=2))
+                content = f"<div class='panel'><pre>{_esc(text)}</pre></div>"
+                title = f"{ticker} GEX"
+            else:
                 alerts = scan_ticker(
                     ticker,
                     max_expiries=2,
@@ -158,31 +229,21 @@ class Handler(BaseHTTPRequestHandler):
                     min_vol_oi_ratio=3.0,
                     min_premium=100_000,
                 )
-                if not alerts:
-                    text = f"No unusual contracts for {ticker}."
-                else:
-                    lines = [f"Unusual options — {ticker}", ""]
-                    for a in alerts[:10]:
-                        lines.append(
-                            f"{a.option_type.upper()} ${a.strike:g} {a.expiry}\n"
-                            f"Vol {a.volume:,} | OI {a.open_interest:,} | Vol/OI {a.vol_oi_ratio}x\n"
-                            f"Premium ${a.premium:,.0f} | Score {a.score}"
-                        )
-                        lines.append("")
-                    text = "\n".join(lines)
-            else:
-                text = format_gex_text(compute_gex(ticker, max_expiries=2))
+                content = render_unusual_cards(alerts, ticker)
+                title = f"{ticker} Unusual Options"
+                mode = "scan"
         except Exception as exc:
-            text = f"Error: {exc}"
+            content = f"<p class='empty'>Error: {_esc(exc)}</p>"
+            title = "Scanner error"
 
-        html = page("GEX Scanner", text, ticker)
+        body = page(title=title, mode=mode, ticker=ticker, content=content)
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(html)
+        self.wfile.write(body)
 
-    def log_message(self, fmt, *args):  # quieter logs
+    def log_message(self, fmt, *args):
         print("[%s] %s" % (self.log_date_time_string(), fmt % args))
 
 
@@ -191,9 +252,8 @@ def main() -> None:
     host = os.getenv("WEB_HOST", "0.0.0.0")
     port = int(os.getenv("WEB_PORT", "8080"))
     server = ThreadingHTTPServer((host, port), Handler)
-    print(f"GEX web scanner: http://127.0.0.1:{port}")
-    print("On iPhone (same Wi-Fi): http://YOUR_COMPUTER_IP:8080")
-    print("Or use Telegram bot for the easiest phone experience.")
+    print(f"Open in Chrome: http://127.0.0.1:{port}")
+    print("Tabs: Unusual | Watchlist | GEX | Demo")
     server.serve_forever()
 
 
