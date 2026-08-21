@@ -1,0 +1,10 @@
+{
+  "name": "unusual-options-bot",
+  "install": "python3 -m venv .venv && .venv/bin/pip install -U pip && .venv/bin/pip install -r requirements.txt",
+  "terminals": [
+    {
+      "name": "web-scanner",
+      "command": ".venv/bin/python webapp.py"
+    }
+  ]
+}
