@@ -31,14 +31,19 @@ def show_alerts(alerts):
     if not alerts:
         st.warning("No unusual contracts matched.")
         return
-    st.write(f"Found **{len(alerts)}** hits (top 15):")
+    st.success(f"Found {len(alerts)} hits (showing top 15)")
     for a in alerts[:15]:
-        st.markdown(
-            f"**{a.ticker} {a.option_type.upper()} ${a.strike:g}** `{a.expiry}`  \n"
-            f"Vol {a.volume:,} · OI {a.open_interest:,} · Vol/OI {a.vol_oi_ratio}x · "
-            f"Premium ${a.premium:,.0f} · Score {a.score}"
-        )
-        st.divider()
+        with st.container(border=True):
+            st.subheader(f"{a.ticker} {a.option_type.upper()} ${a.strike:g}")
+            st.caption(f"Expiry {a.expiry} · Score {a.score}")
+            c1, c2 = st.columns(2)
+            c1.write(f"Vol: {a.volume:,}")
+            c1.write(f"OI: {a.open_interest:,}")
+            c2.write(f"Vol/OI: {a.vol_oi_ratio}x")
+            c2.write(f"Premium: ${a.premium:,.0f}")
+            st.caption(f"Last ${a.last_price:.2f} · Spot ${a.spot:.2f}")
+            if a.reasons:
+                st.caption(" · ".join(a.reasons))
 
 
 if mode == "Demo" or not go:
