@@ -2,48 +2,31 @@
 
 Free unusual-options + GEX scanner.
 
-## Use on iPhone (permanent)
+## Important Streamlit Cloud note
 
-`127.0.0.1` **never works on iPhone**. You need a public HTTPS link.
+`runtime.txt` is **ignored** by Streamlit Community Cloud.
+You must set Python in the Streamlit UI:
 
-### Easiest permanent host: Streamlit Community Cloud (free)
+1. Open your app → **Manage app** → **Settings**
+2. Set **Python version = 3.11**
+3. Make the app **Public**
+4. **Reboot** the app
 
-1. Open: https://share.streamlit.io/
-2. Sign in with GitHub (`mosabissa1981-creator`)
-3. **New app** → repo: `unusual-options-bot`
-4. Main file: `streamlit_app.py`
-5. Deploy
-6. Open the `*.streamlit.app` link in iPhone Chrome
-7. Optional: Share → Add to Home Screen
+If Python stays on 3.14, Pillow/pandas fail to install.
 
-### Other hosts
-- **Render**: connect this repo (uses `Dockerfile` / `render.yaml`)
-- **Railway / Fly.io**: deploy the Docker image
+## Use on iPhone
 
-## Run on your computer
+1. Deploy from GitHub at https://share.streamlit.io/
+2. Repo: `unusual-options-bot`
+3. Main file: `streamlit_app.py`
+4. Advanced settings: **Python 3.11**
+5. Open the `*.streamlit.app` link in iPhone Chrome
+
+## Run on computer
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-
-# Phone-friendly UI (recommended)
 streamlit run streamlit_app.py
-
-# Or classic HTML UI
-python webapp.py
 ```
-
-Computer only: http://127.0.0.1:8501 (Streamlit) or :8080 (webapp)
-
-## Telegram (also great on iPhone)
-
-1. Create a bot with `@BotFather`
-2. Put token in `.env` as `TELEGRAM_BOT_TOKEN=...`
-3. `python telegram_bot.py`
-4. Send `/scan NVDA` or `/gex SPY`
-
-## Notes
-- Free delayed Yahoo Finance data
-- Not Unusual Whales / paid flow
-- GEX is an approximation
