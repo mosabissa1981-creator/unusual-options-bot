@@ -7,7 +7,45 @@ from datetime import datetime, timezone
 from typing import Iterable
 
 import pandas as pd
+import requests
 import yfinance as yf
+
+
+class MarketDataError(RuntimeError):
+    """Raised when Yahoo/options data cannot be fetched cleanly."""
+
+
+def _yahoo_session() -> requests.Session:
+    session = requests.Session()
+    session.headers.update(
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json,text/plain,*/*",
+        }
+    )
+    return session
+
+
+def _ticker(symbol: str) -> yf.Ticker:
+    return yf.Ticker(symbol.upper().strip(), session=_yahoo_session())
+
+
+def _friendly_market_error(symbol: str, exc: Exception) -> MarketDataError:
+    text = str(exc).lower()
+    if "expecting value" in text or "json" in text:
+        return MarketDataError(
+            f"{symbol}: Yahoo returned empty/blocked data (common on Streamlit Cloud). "
+            "Wait 30–60s and retry, or use Demo mode."
+        )
+    if "rate" in text or "too many" in text:
+        return MarketDataError(
+            f"{symbol}: Yahoo rate-limited this server. Wait a minute and retry, or use Demo."
+        )
+    return MarketDataError(f"{symbol}: market data error — {exc}")
 
 
 @dataclass
@@ -83,7 +121,6 @@ def score_contract(
         reasons.append(f"premium ${premium:,.0f}")
         score += min(premium / min_premium, 10) * 3
 
-    # Prefer near-term and somewhat OTM flow (common unusual-flow heuristics)
     if spot > 0 and strike > 0:
         moneyness = abs(strike - spot) / spot
         if 0.02 <= moneyness <= 0.15:
@@ -119,16 +156,26 @@ def scan_ticker(
     min_vol_oi_ratio: float = 2.0,
     min_premium: float = 50_000,
 ) -> list[UnusualAlert]:
-    stock = yf.Ticker(ticker)
-    expiries = list(stock.options or [])
+    symbol = ticker.upper().strip()
+    stock = _ticker(symbol)
+    try:
+        expiries = list(stock.options or [])
+    except Exception as exc:
+        raise _friendly_market_error(symbol, exc) from exc
+
     if not expiries:
-        return []
+        raise MarketDataError(
+            f"{symbol}: no option expiries returned. Ticker may be invalid, or Yahoo blocked the request."
+        )
 
     spot = _safe_float(getattr(stock.fast_info, "last_price", None))
     if spot <= 0:
-        hist = stock.history(period="1d")
-        if not hist.empty:
-            spot = _safe_float(hist["Close"].iloc[-1])
+        try:
+            hist = stock.history(period="1d")
+            if not hist.empty:
+                spot = _safe_float(hist["Close"].iloc[-1])
+        except Exception:
+            spot = 0.0
 
     alerts: list[UnusualAlert] = []
     for expiry in expiries[:max_expiries]:
@@ -142,7 +189,7 @@ def scan_ticker(
                 continue
             for _, row in frame.iterrows():
                 alert = score_contract(
-                    ticker=ticker,
+                    ticker=symbol,
                     option_type=option_type,
                     row=row,
                     spot=spot,
@@ -160,15 +207,19 @@ def scan_ticker(
 
 def scan_watchlist(tickers: Iterable[str], **kwargs) -> list[UnusualAlert]:
     all_alerts: list[UnusualAlert] = []
+    errors: list[str] = []
     for ticker in tickers:
         symbol = ticker.strip().upper()
         if not symbol:
             continue
         try:
             all_alerts.extend(scan_ticker(symbol, **kwargs))
-        except Exception as exc:  # keep scanning other symbols
+        except Exception as exc:
+            errors.append(str(exc))
             print(f"[warn] {symbol}: {exc}")
     all_alerts.sort(key=lambda a: a.score, reverse=True)
+    if not all_alerts and errors:
+        raise MarketDataError(errors[0])
     return all_alerts
 
 

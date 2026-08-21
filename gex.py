@@ -123,11 +123,16 @@ def _flip_strike(levels: list[StrikeGex]) -> float | None:
 
 
 def compute_gex(ticker: str, max_expiries: int = 1) -> GexSnapshot:
+    from scanner import MarketDataError, _friendly_market_error, _ticker
+
     symbol = ticker.strip().upper()
-    stock = yf.Ticker(symbol)
-    expiries = list(stock.options or [])
+    stock = _ticker(symbol)
+    try:
+        expiries = list(stock.options or [])
+    except Exception as exc:
+        raise _friendly_market_error(symbol, exc) from exc
     if not expiries:
-        raise ValueError(f"No options found for {symbol}")
+        raise MarketDataError(f"No options found for {symbol}")
 
     spot = _safe_float(getattr(stock.fast_info, "last_price", None))
     if spot <= 0:

@@ -8,6 +8,11 @@ st.set_page_config(page_title="Unusual Options", layout="centered")
 st.title("Unusual Options")
 st.caption("Free scanner · phone friendly")
 
+st.info(
+    "Live scans use free Yahoo data. On Streamlit Cloud, Yahoo often rate-limits "
+    "or blocks requests — if Unusual fails, wait 1 minute or use **Demo**."
+)
+
 mode = st.radio("Mode", ["Demo", "Unusual", "Watchlist", "GEX"], horizontal=True)
 ticker = (st.text_input("Ticker", "NVDA") or "NVDA").strip().upper()
 go = st.button("Scan", type="primary", use_container_width=True)
