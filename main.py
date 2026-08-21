@@ -12,6 +12,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from alerts import format_alert, send_discord
+from gex import compute_gex, demo_gex, format_gex_text
 from scanner import demo_alerts, scan_watchlist
 
 
@@ -63,6 +64,7 @@ def run_once(args: argparse.Namespace, settings: dict) -> list:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Unusual options activity bot")
     parser.add_argument("--demo", action="store_true", help="Use sample alerts (no market data)")
+    parser.add_argument("--gex", metavar="TICKER", help="Print GEX scanner for one ticker")
     parser.add_argument("--loop", action="store_true", help="Rescan forever")
     parser.add_argument("--interval", type=int, default=300, help="Seconds between scans in --loop")
     parser.add_argument("--limit", type=int, default=15, help="Max alerts to print/send")
@@ -70,6 +72,12 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = load_settings()
+
+    if args.gex:
+        ticker = args.gex.upper()
+        snap = demo_gex(ticker) if args.demo else compute_gex(ticker, max_expiries=2)
+        print(format_gex_text(snap))
+        return
 
     while True:
         started = time.time()

@@ -1,19 +1,75 @@
-# Unusual Options Bot
+# Unusual Options + GEX Scanner
 
-A simple starter bot that scans a stock watchlist for **unusual options activity** and prints (or Discord-posts) the top hits.
+Free prototype that scans unusual options and approximates **GEX (gamma exposure)** by strike.
 
-## How it works
+## Easiest on iPhone: Telegram
 
-1. Pulls option chains for tickers you choose (free Yahoo Finance data via `yfinance`)
-2. Scores contracts that look unusual:
-   - high **volume vs open interest**
-   - large estimated **premium** (`volume × price × 100`)
-   - mildly out-of-the-money near-term contracts
-3. Ranks by score and alerts you
+1. On iPhone, install **Telegram**
+2. Open Telegram → search **@BotFather** → Start
+3. Send `/newbot`, pick a name (e.g. `My GEX Scanner`) and username
+4. Copy the **token** BotFather gives you
+5. On your computer:
 
-This is a learning prototype. It is **not** Unusual Whales-quality full-market flow.
+```bash
+cd unusual-options-bot
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+cp .env.example .env
+```
 
-## Quick start
+6. Edit `.env` and paste:
+```
+TELEGRAM_BOT_TOKEN=123456:ABC-your-token
+```
+
+7. Start the bot (keep this running on your computer/VPS):
+```bash
+python telegram_bot.py
+```
+
+8. On iPhone Telegram, open **your bot** → Start, then try:
+- `/gex SPY`
+- `/scan NVDA`
+- `/demo`
+
+That’s the easiest phone workflow: tap commands, get GEX levels back as messages.
+
+---
+
+## Mobile web (Safari / Home Screen)
+
+```bash
+source .venv/bin/activate
+python webapp.py
+```
+
+- On the same computer: open `http://127.0.0.1:8080`
+- On iPhone (same Wi‑Fi): open `http://YOUR_COMPUTER_IP:8080`
+- In Safari: Share → **Add to Home Screen**
+
+Buttons: **GEX**, **Unusual**, quick tickers SPY/QQQ/NVDA/TSLA.
+
+---
+
+## Laptop terminal (original)
+
+```bash
+python main.py --demo
+python main.py
+python main.py --gex SPY
+```
+
+---
+
+## What GEX numbers mean (simple)
+
+- **Net GEX positive**: dealers often dampen moves (pin / choppier)
+- **Net GEX negative**: moves can extend more easily
+- **Flip / zero-gamma**: area where GEX sign changes
+- **Large +/− GEX strikes**: magnets / walls traders watch
+
+This is an **approximation** from free Yahoo chains (OI + gamma), not SpotGamma/Unusual Whales dealer GEX.
+
+## Install (first time)
 
 ```bash
 cd unusual-options-bot
@@ -21,47 +77,4 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-
-# See sample output instantly
-python main.py --demo
-
-# Live scan (delayed free data)
-python main.py
-
-# Keep scanning every 5 minutes
-python main.py --loop --interval 300
 ```
-
-## Optional Discord alerts
-
-1. In Discord: channel settings → Integrations → Webhooks → New Webhook
-2. Paste the URL into `.env`:
-
-```
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-```
-
-3. Run `python main.py` (or `--demo`)
-
-## Tune sensitivity
-
-Edit `.env`:
-
-- `WATCHLIST` — tickers to scan
-- `MIN_VOLUME` — ignore tiny prints
-- `MIN_VOL_OI_RATIO` — e.g. `2.0` means volume at least 2× open interest
-- `MIN_PREMIUM` — minimum notional interest in dollars
-- `MAX_EXPIRIES` — how many nearest expirations to check
-
-## Limits of this free version
-
-- Delayed / incomplete data vs paid flow vendors
-- Watchlist only (not every ticker in the market)
-- No sweep/block/ask-side aggression tags like Unusual Whales
-- Yahoo data can fail or rate-limit
-
-## Next upgrades
-
-1. Broker API (Tradier) for cleaner chains
-2. Unusual Whales API for true flow alerts (~$150/mo)
-3. Host on a cheap VPS / GitHub Actions cron to run during market hours
