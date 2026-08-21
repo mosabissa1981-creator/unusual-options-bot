@@ -4,22 +4,23 @@ from __future__ import annotations
 
 import streamlit as st
 
+APP_VERSION = "2026-08-21c"
+
 st.set_page_config(page_title="Unusual Options", layout="centered")
 st.title("Unusual Options")
-st.caption("Free scanner · phone friendly")
+st.caption(f"Free scanner · phone friendly · build {APP_VERSION}")
 
 st.info(
-    "Live scans use free Yahoo data. On Streamlit Cloud, Yahoo often rate-limits "
-    "or blocks requests — if Unusual fails, wait 1 minute or use **Demo**."
+    "Demo always works. Live Unusual/GEX uses free Yahoo data — "
+    "Yahoo often blocks Streamlit Cloud, so live scans may fail."
 )
 
 mode = st.radio("Mode", ["Demo", "Unusual", "Watchlist", "GEX"], horizontal=True)
 ticker = (st.text_input("Ticker", "NVDA") or "NVDA").strip().upper()
 go = st.button("Scan", type="primary", use_container_width=True)
 
-# Lazy imports so the page can boot even if market libs are still installing.
 try:
-    from gex import compute_gex, demo_gex, format_gex_text
+    from gex import compute_gex, format_gex_text
     from scanner import demo_alerts, scan_ticker, scan_watchlist
 except Exception as exc:
     st.error("Dependencies are still loading or failed to import.")
@@ -27,11 +28,11 @@ except Exception as exc:
     st.stop()
 
 
-def show_alerts(alerts):
+def show_alerts(alerts, title: str = "hits"):
     if not alerts:
         st.warning("No unusual contracts matched.")
         return
-    st.success(f"Found {len(alerts)} hits (showing top 15)")
+    st.success(f"Found {len(alerts)} {title} (showing top 15)")
     for a in alerts[:15]:
         with st.container(border=True):
             st.subheader(f"{a.ticker} {a.option_type.upper()} ${a.strike:g}")
@@ -46,12 +47,15 @@ def show_alerts(alerts):
                 st.caption(" · ".join(a.reasons))
 
 
+# Demo (or first load) — always reliable on phone
 if mode == "Demo" or not go:
-    show_alerts(demo_alerts())
+    st.warning("DEMO DATA — sample alerts, not live market prints.")
+    show_alerts(demo_alerts(), title="demo hits")
     if mode != "Demo":
-        st.info("Tap **Scan** for live data.")
+        st.info("Tap **Scan** for a live attempt.")
     st.stop()
 
+# Live modes
 try:
     if mode == "Watchlist":
         with st.spinner("Scanning watchlist…"):
@@ -63,7 +67,8 @@ try:
                     min_open_interest=100,
                     min_vol_oi_ratio=3.0,
                     min_premium=100_000,
-                )
+                ),
+                title="live hits",
             )
     elif mode == "GEX":
         with st.spinner(f"GEX {ticker}…"):
@@ -78,8 +83,10 @@ try:
                     min_open_interest=100,
                     min_vol_oi_ratio=3.0,
                     min_premium=100_000,
-                )
+                ),
+                title="live hits",
             )
 except Exception as exc:
-    st.error(f"Scan failed: {exc}")
-    st.exception(exc)
+    st.error(f"Live scan failed: {exc}")
+    st.warning("Showing DEMO data so the phone app still works.")
+    show_alerts(demo_alerts(), title="demo hits")
