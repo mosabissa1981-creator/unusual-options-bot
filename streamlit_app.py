@@ -1,46 +1,26 @@
-"""Unusual Options + GEX scanner — mobile-friendly Streamlit app for iPhone Chrome."""
+"""Unusual Options + GEX scanner — mobile-friendly Streamlit app for iPhone."""
 
 from __future__ import annotations
 
 import streamlit as st
 
-from gex import compute_gex, demo_gex, format_gex_text
-from scanner import demo_alerts, scan_ticker, scan_watchlist
-
-WATCHLIST = ["SPY", "QQQ", "AAPL", "NVDA", "TSLA", "AMZN", "META", "MSFT"]
-
 st.set_page_config(
     page_title="Unusual Options",
-    page_icon="📈",
+    page_icon=":chart_with_upwards_trend:",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
 
-st.markdown(
-    """
-    <style>
-      .block-container { padding-top: 1.2rem; padding-bottom: 2rem; max-width: 820px; }
-      div[data-testid="stMetricValue"] { font-size: 1.1rem; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.title("Unusual Options")
-st.caption("Free scanner for phone & desktop. Delayed Yahoo data.")
-
-mode = st.radio(
-    "Mode",
-    ["Unusual", "Watchlist", "GEX", "Demo"],
-    horizontal=True,
-)
-
-ticker = st.text_input("Ticker", value="NVDA").strip().upper() or "NVDA"
-run = st.button("Scan", type="primary", use_container_width=True)
-
-if not run and mode != "Demo":
-    st.info("Tap **Scan** to load live data. On iPhone use your public app link, not 127.0.0.1.")
+try:
+    from gex import compute_gex, demo_gex, format_gex_text
+    from scanner import demo_alerts, scan_ticker, scan_watchlist
+except Exception as exc:  # pragma: no cover - boot diagnostics on Streamlit Cloud
+    st.title("Unusual Options")
+    st.error("App failed to import modules.")
+    st.exception(exc)
     st.stop()
+
+WATCHLIST = ["SPY", "QQQ", "AAPL", "NVDA", "TSLA", "AMZN", "META", "MSFT"]
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -87,13 +67,35 @@ def show_alerts(alerts):
             c2.metric("OI", f"{a.open_interest:,}")
             c3.metric("Vol/OI", f"{a.vol_oi_ratio}x")
             c4.metric("Premium", f"${a.premium:,.0f}")
-            st.caption(f"Last ${a.last_price:.2f} · Spot ${a.spot:.2f} · {', '.join(a.reasons)}")
+            st.caption(
+                f"Last ${a.last_price:.2f} · Spot ${a.spot:.2f} · {', '.join(a.reasons)}"
+            )
 
+
+st.title("Unusual Options")
+st.caption("Free scanner for phone & desktop. Delayed Yahoo data.")
+
+mode = st.radio(
+    "Mode",
+    ["Demo", "Unusual", "Watchlist", "GEX"],
+    horizontal=True,
+    index=0,
+)
+ticker = st.text_input("Ticker", value="NVDA").strip().upper() or "NVDA"
+run = st.button("Scan", type="primary", use_container_width=True)
+
+# Always show Demo content so the app boots even before a live scan.
+if mode == "Demo" or (not run and mode == "Demo"):
+    show_alerts(demo_alerts())
+    st.info("Switch mode to Unusual / Watchlist / GEX, then tap Scan.")
+    st.stop()
+
+if not run:
+    st.info("Tap **Scan** to load live data.")
+    st.stop()
 
 try:
-    if mode == "Demo":
-        show_alerts(demo_alerts())
-    elif mode == "Watchlist":
+    if mode == "Watchlist":
         with st.spinner("Scanning watchlist…"):
             show_alerts(cached_watchlist())
     elif mode == "GEX":
@@ -104,3 +106,4 @@ try:
             show_alerts(cached_scan_ticker(ticker))
 except Exception as exc:
     st.error(f"Scan failed: {exc}")
+    st.exception(exc)
